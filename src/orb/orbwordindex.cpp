@@ -21,23 +21,62 @@
 
 #include <iostream>
 #include <fstream>
+#include <glog/logging.h>
 
 #include <orbwordindex.h>
 
 
 ORBWordIndex::ORBWordIndex(string visualWordsPath) : words(new Mat(0, 32, CV_8U))
 {
+    initIndex(visualWordsPath);
+
+    LOG(INFO) << "building index";
+    kdIndex->buildIndex();
+}
+
+ORBWordIndex::ORBWordIndex(string visualWordsPath, string treePath) : words(new Mat(0, 32, CV_8U))
+{
+    initIndex(visualWordsPath);
+
+    if (!loadIndex(treePath))
+        saveIndex(treePath);
+}
+
+void ORBWordIndex::initIndex(string visualWordsPath) {
+    LOG(INFO) << "init index";
     if (!readVisualWords(visualWordsPath))
         exit(1);
     assert(words->rows == 1000000);
 
-    cout << "Building the word index." << endl;
-
     cvflann::Matrix<unsigned char> m_features
             ((unsigned char*)words->ptr<unsigned char>(0), words->rows, words->cols);
-    kdIndex = unique_ptr<FlannIndex>(new FlannIndex(m_features,cvflann::HierarchicalClusteringIndexParams(10, cvflann::FLANN_CENTERS_RANDOM, 8, 100)));
-    kdIndex->buildIndex();
+    kdIndex = unique_ptr<FlannIndex>(
+        new FlannIndex(m_features, cvflann::HierarchicalClusteringIndexParams(10, cvflann::FLANN_CENTERS_RANDOM, 8, 100)));
 }
+
+void ORBWordIndex::saveIndex(string treePath) {
+    LOG(INFO) << "building index";
+    kdIndex->buildIndex();
+
+    LOG(INFO) << "saving tree to " << treePath;
+    FILE* fp = fopen(treePath.c_str(), "wb");
+    assert(fp);
+    kdIndex->saveIndex(fp);
+    fclose(fp);
+}
+
+bool ORBWordIndex::loadIndex(string treePath) {
+    LOG(INFO) << "loading index from " << treePath;
+    FILE* fp = fopen(treePath.c_str(), "rb");
+    if (fp) {
+        kdIndex->loadIndex(fp);
+        fclose(fp);
+        return true;
+    } else {
+        return false;
+    }
+}
+
 
 void ORBWordIndex::knnSearch(const Mat& query, vector<int>& indices,
                           vector<int>& dists, int knn)

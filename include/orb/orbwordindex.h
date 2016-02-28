@@ -22,6 +22,7 @@
 #ifndef PASTEC_ORBWORDINDEX_H
 #define PASTEC_ORBWORDINDEX_H
 
+#include <string>
 #include <vector>
 #include <memory>
 #include <opencv2/core/core.hpp>
@@ -36,12 +37,16 @@ class ORBWordIndex
 {
 public:
     ORBWordIndex(string visualWordsPath);
+    ORBWordIndex(string visualWordsPath, string treePath);
     ~ORBWordIndex() {};
     void knnSearch(const Mat &query, vector<int>& indices,
                    vector<int> &dists, int knn);
 
 private:
     bool readVisualWords(string fileName);
+    void initIndex(string visualWordsPath);
+    void saveIndex(string treePath);
+    bool loadIndex(string treePath);
 
     unique_ptr<Mat> words;  // The matrix that stores the visual words.
     unique_ptr<FlannIndex> kdIndex; // The kd-tree index.
