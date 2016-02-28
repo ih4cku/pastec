@@ -64,43 +64,43 @@ class RankingThread : public Thread
 public:
     RankingThread(ORBIndex *index, const unsigned i_nbTotalIndexedImages,
                   std::unordered_map<u_int32_t, vector<Hit> > &indexHits)
-        : index(index), i_nbTotalIndexedImages(i_nbTotalIndexedImages),
-          indexHits(indexHits) { }
+        : index_(index), i_nbTotalIndexedImages_(i_nbTotalIndexedImages),
+          indexHits_(indexHits) { }
 
     void addWord(u_int32_t i_wordId)
     {
-        wordIds.push_back(i_wordId);
+        wordIds_.push_back(i_wordId);
     }
 
     void *run()
     {
-        weights.rehash(wordIds.size());
+        weights_.rehash(wordIds_.size());
 
-        for (deque<u_int32_t>::const_iterator it = wordIds.begin();
-            it != wordIds.end(); ++it)
+        for (deque<u_int32_t>::const_iterator it = wordIds_.begin();
+            it != wordIds_.end(); ++it)
         {
-            const vector<Hit> &hits = indexHits[*it];
+            const vector<Hit> &hits = indexHits_[*it];
 
-            const float f_weight = log((float)i_nbTotalIndexedImages / hits.size());
+            const float f_weight = log((float)i_nbTotalIndexedImages_ / hits.size());
 
             for (vector<Hit>::const_iterator it2 = hits.begin();
                  it2 != hits.end(); ++it2)
             {
                 /* TF-IDF according to the paper "Video Google:
                  * A Text Retrieval Approach to Object Matching in Videos" */
-                unsigned i_totalNbWords = index->countTotalNbWord(it2->i_imageId);
-                weights[it2->i_imageId] += f_weight / i_totalNbWords;
+                unsigned i_totalNbWords = index_->countTotalNbWord(it2->i_imageId);
+                weights_[it2->i_imageId] += f_weight / i_totalNbWords;
             }
         }
 
         return NULL;
     }
 
-    ORBIndex *index;
-    const unsigned i_nbTotalIndexedImages;
-    std::unordered_map<u_int32_t, vector<Hit> > &indexHits;
-    deque<u_int32_t> wordIds;
-    std::unordered_map<u_int32_t, float> weights; // key: image id, value: image score.
+    ORBIndex *index_;
+    const unsigned i_nbTotalIndexedImages_;
+    std::unordered_map<u_int32_t, vector<Hit> > &indexHits_;
+    deque<u_int32_t> wordIds_;
+    std::unordered_map<u_int32_t, float> weights_; // key: image id, value: image score.
 };
 
 
@@ -218,6 +218,7 @@ u_int32_t ORBSearcher::processSimilar(SearchRequest &request,
     cout << "time: " << getTimeDiff(t[0], t[1]) << " ms." << endl;
     cout << "Ranking the images." << endl;
 
+    //--------------------- tfidf --------------------- 
     index->readLock();
     #define NB_RANKING_THREAD 4
 
@@ -251,8 +252,8 @@ u_int32_t ORBSearcher::processSimilar(SearchRequest &request,
     std::unordered_map<u_int32_t, float> weights; // key: image id, value: image score.
     weights.rehash(i_nbTotalIndexedImages);
     for (unsigned i = 0; i < NB_RANKING_THREAD; ++i)
-        for (std::unordered_map<u_int32_t, float>::const_iterator it = threads[i]->weights.begin();
-            it != threads[i]->weights.end(); ++it)
+        for (std::unordered_map<u_int32_t, float>::const_iterator it = threads[i]->weights_.begin();
+            it != threads[i]->weights_.end(); ++it)
             weights[it->first] += it->second;
 
     gettimeofday(&t[4], NULL);
@@ -264,6 +265,7 @@ u_int32_t ORBSearcher::processSimilar(SearchRequest &request,
 
     index->unlock();
 
+    //--------------------- RANSAC --------------------- 
     priority_queue<SearchResult> rankedResults;
     for (std::unordered_map<unsigned, float>::const_iterator it = weights.begin();
          it != weights.end(); ++it)

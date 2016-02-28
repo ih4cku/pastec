@@ -70,13 +70,13 @@ public:
     void unlock();
 
 private:
-    u_int64_t nbOccurences[NB_VISUAL_WORDS];
-    u_int64_t totalNbRecords;
-    bool buildForwardIndex;
+    u_int64_t nbOccurences_[NB_VISUAL_WORDS];
+    u_int64_t totalNbRecords_;
+    bool buildForwardIndex_;
 
-    unordered_map<u_int64_t, unsigned> nbWords;
-    unordered_map<u_int64_t, vector<unsigned> > forwardIndex;
-    unordered_map<u_int32_t, string> tags;
+    unordered_map<u_int64_t, unsigned> nbWords_;
+    unordered_map<u_int64_t, vector<unsigned> > forwardIndex_;
+    unordered_map<u_int32_t, string> tags_;
     vector<Hit> indexHits_[NB_VISUAL_WORDS];
 
     pthread_rwlock_t rwLock;

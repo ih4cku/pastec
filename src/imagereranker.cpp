@@ -35,15 +35,15 @@
 
 void *RANSACThread::run()
 {
-    for (unsigned i = 0; i < imageIds.size(); ++i)
+    for (unsigned i = 0; i < imageIds_.size(); ++i)
     {
-        const unsigned i_imageId = imageIds[i];
-        const Histogram histogram = histograms[i];
+        const unsigned i_imageId = imageIds_[i];
+        const Histogram histogram = histograms_[i];
         unsigned i_binMax = max_element(histogram.bins, histogram.bins + HISTOGRAM_NB_BINS) - histogram.bins;
         float i_maxVal = histogram.bins[i_binMax];
         if (i_maxVal > 10)
         {
-            RANSACTask &task = imgTasks[i_imageId];
+            RANSACTask &task = imgTasks_[i_imageId];
             assert(task.points1.size() == task.points2.size());
 
             if (task.points1.size() >= RANSAC_MIN_INLINERS)
@@ -55,9 +55,9 @@ void *RANSACThread::run()
 
                 Rect bRect1 = boundingRect(task.points1);
 
-                pthread_mutex_lock(&mutex);
-                rankedResultsOut.push(SearchResult(i_maxVal, i_imageId, bRect1));
-                pthread_mutex_unlock(&mutex);
+                pthread_mutex_lock(&mutex_);
+                rankedResultsOut_.push(SearchResult(i_maxVal, i_imageId, bRect1));
+                pthread_mutex_unlock(&mutex_);
             }
         }
     }
@@ -133,8 +133,8 @@ void ImageReranker::rerank(unordered_map<u_int32_t, list<Hit> > &imagesReqHits,
     {
         unsigned i_imageId = it->first;
         Histogram histogram = it->second;
-        threads[i % NB_RANSAC_THREAD]->imageIds.push_back(i_imageId);
-        threads[i % NB_RANSAC_THREAD]->histograms.push_back(histogram);
+        threads[i % NB_RANSAC_THREAD]->imageIds_.push_back(i_imageId);
+        threads[i % NB_RANSAC_THREAD]->histograms_.push_back(histogram);
     }
 
     // Compute

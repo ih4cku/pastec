@@ -89,17 +89,17 @@ public:
     RANSACThread(pthread_mutex_t &mutex,
                  std::unordered_map<u_int32_t, RANSACTask> &imgTasks,
                  priority_queue<SearchResult> &rankedResultsOut)
-        : mutex(mutex), imgTasks(imgTasks), rankedResultsOut(rankedResultsOut)
+        : mutex_(mutex), imgTasks_(imgTasks), rankedResultsOut_(rankedResultsOut)
     { }
 
 public:
     void *run();
 
-    pthread_mutex_t &mutex;
-    std::unordered_map<u_int32_t, RANSACTask> &imgTasks;
-    priority_queue<SearchResult> &rankedResultsOut;
-    deque<unsigned> imageIds;
-    deque<Histogram> histograms;
+    pthread_mutex_t &mutex_;
+    std::unordered_map<u_int32_t, RANSACTask> &imgTasks_;
+    priority_queue<SearchResult> &rankedResultsOut_;
+    deque<unsigned> imageIds_;
+    deque<Histogram> histograms_;
 
 private:
     void getRTMatrix(const Point2f* a, const Point2f* b,
