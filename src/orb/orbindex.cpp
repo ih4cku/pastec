@@ -66,7 +66,7 @@ ORBIndex::~ORBIndex()
 }
 
 
-void ORBIndex::getImagesWithVisualWords(unordered_map<u_int32_t, list<Hit> > &imagesReqHits,
+void ORBIndex::getImagesWithVisualWords(const unordered_map<u_int32_t, list<Hit> > &imagesReqHits,
                                      unordered_map<u_int32_t, vector<Hit> > &indexHitsForReq)
 {
     pthread_rwlock_rdlock(&rwLock);
@@ -75,7 +75,7 @@ void ORBIndex::getImagesWithVisualWords(unordered_map<u_int32_t, list<Hit> > &im
          it != imagesReqHits.end(); ++it)
     {
         const unsigned i_wordId = it->first;
-        indexHitsForReq[i_wordId] = indexHits[i_wordId];
+        indexHitsForReq[i_wordId] = indexHits_[i_wordId];
     }
 
     pthread_rwlock_unlock(&rwLock);
@@ -132,7 +132,7 @@ u_int32_t ORBIndex::addImage(unsigned i_imageId, list<HitForward> hitList)
         {
             forwardIndex[hitFor.i_imageId].push_back(hitFor.i_wordId);
         }
-        indexHits[hitFor.i_wordId].push_back(hitBack);
+        indexHits_[hitFor.i_wordId].push_back(hitBack);
         nbWords[hitFor.i_imageId]++;
         nbOccurences[hitFor.i_wordId]++;
         totalNbRecords++;
@@ -210,7 +210,7 @@ u_int32_t ORBIndex::removeImage(const unsigned i_imageId)
 
     for (unsigned i_wordId = 0; i_wordId < NB_VISUAL_WORDS; ++i_wordId)
     {
-        vector<Hit> &hits = indexHits[i_wordId];
+        vector<Hit> &hits = indexHits_[i_wordId];
         vector<Hit>::iterator it = hits.begin();
 
         while (it != hits.end())
@@ -267,7 +267,7 @@ u_int32_t ORBIndex::getImageWords(unsigned i_imageId, unordered_map<u_int32_t, l
 
             if (getWordNbOccurences(i_wordId) <= i_maxNbOccurences)
             {
-                vector<Hit> &hits = indexHits[i_wordId];
+                vector<Hit> &hits = indexHits_[i_wordId];
                 vector<Hit>::iterator hit_it = hits.begin();
 
                 while (hit_it != hits.end())
@@ -287,7 +287,7 @@ u_int32_t ORBIndex::getImageWords(unsigned i_imageId, unordered_map<u_int32_t, l
     {
         for (unsigned i_wordId = 0; i_wordId < NB_VISUAL_WORDS; ++i_wordId)
         {
-            vector<Hit> &hits = indexHits[i_wordId];
+            vector<Hit> &hits = indexHits_[i_wordId];
             vector<Hit>::iterator it = hits.begin();
 
             while (it != hits.end())
@@ -391,7 +391,7 @@ u_int32_t ORBIndex::write(string backwardIndexPath)
     cout << "Writing the index hits." << endl;
     for (unsigned i = 0; i < NB_VISUAL_WORDS; ++i)
     {
-        const vector<Hit> &wordHits = indexHits[i];
+        const vector<Hit> &wordHits = indexHits_[i];
 
         for (unsigned j = 0; j < wordHits.size(); ++j)
         {
@@ -423,7 +423,7 @@ u_int32_t ORBIndex::clear()
     for (unsigned i = 0; i < NB_VISUAL_WORDS; ++i)
     {
         nbOccurences[i] = 0;
-        indexHits[i].clear();
+        indexHits_[i].clear();
     }
 
     nbWords.clear();
@@ -497,7 +497,7 @@ u_int32_t ORBIndex::load(string backwardIndexPath)
         for (unsigned i_wordId = 0; i_wordId < NB_VISUAL_WORDS; ++i_wordId)
         {
             indexAccess.moveAt(wordOffSet[i_wordId]);
-            vector<Hit> &hits = indexHits[i_wordId];
+            vector<Hit> &hits = indexHits_[i_wordId];
 
             const unsigned i_nbOccurences = nbOccurences[i_wordId];
             hits.resize(i_nbOccurences);

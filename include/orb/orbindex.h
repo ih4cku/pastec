@@ -47,7 +47,7 @@ class ORBIndex : public Index
 public:
     ORBIndex(string indexPath, bool buildForwardIndex);
     virtual ~ORBIndex();
-    void getImagesWithVisualWords(std::unordered_map<u_int32_t, list<Hit> > &imagesReqHits,
+    void getImagesWithVisualWords(const std::unordered_map<u_int32_t, list<Hit> > &imagesReqHits,
                                   std::unordered_map<u_int32_t, vector<Hit> > &indexHitsForReq);
     unsigned getWordNbOccurences(unsigned i_wordId);
     unsigned countTotalNbWord(unsigned i_imageId);
@@ -77,7 +77,7 @@ private:
     unordered_map<u_int64_t, unsigned> nbWords;
     unordered_map<u_int64_t, vector<unsigned> > forwardIndex;
     unordered_map<u_int32_t, string> tags;
-    vector<Hit> indexHits[NB_VISUAL_WORDS];
+    vector<Hit> indexHits_[NB_VISUAL_WORDS];
 
     pthread_rwlock_t rwLock;
 };
