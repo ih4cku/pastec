@@ -25,10 +25,8 @@
 #include <orbwordindex.h>
 
 
-ORBWordIndex::ORBWordIndex(string visualWordsPath)
+ORBWordIndex::ORBWordIndex(string visualWordsPath) : words(new Mat(0, 32, CV_8U))
 {
-    words = new Mat(0, 32, CV_8U); // The matrix that stores the visual words.
-
     if (!readVisualWords(visualWordsPath))
         exit(1);
     assert(words->rows == 1000000);
@@ -37,18 +35,9 @@ ORBWordIndex::ORBWordIndex(string visualWordsPath)
 
     cvflann::Matrix<unsigned char> m_features
             ((unsigned char*)words->ptr<unsigned char>(0), words->rows, words->cols);
-    kdIndex = new cvflann::HierarchicalClusteringIndex<cvflann::Hamming<unsigned char> >
-            (m_features,cvflann::HierarchicalClusteringIndexParams(10, cvflann::FLANN_CENTERS_RANDOM, 8, 100));
+    kdIndex = unique_ptr<FlannIndex>(new FlannIndex(m_features,cvflann::HierarchicalClusteringIndexParams(10, cvflann::FLANN_CENTERS_RANDOM, 8, 100)));
     kdIndex->buildIndex();
 }
-
-
-ORBWordIndex::~ORBWordIndex()
-{
-    delete words;
-    delete kdIndex;
-}
-
 
 void ORBWordIndex::knnSearch(const Mat& query, vector<int>& indices,
                           vector<int>& dists, int knn)

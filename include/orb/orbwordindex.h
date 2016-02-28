@@ -23,27 +23,28 @@
 #define PASTEC_ORBWORDINDEX_H
 
 #include <vector>
-
+#include <memory>
 #include <opencv2/core/core.hpp>
 #include <opencv2/flann/flann.hpp>
 
 using namespace cv;
 using namespace std;
 
+typedef cvflann::HierarchicalClusteringIndex<cvflann::Hamming<unsigned char> > FlannIndex;
 
 class ORBWordIndex
 {
 public:
     ORBWordIndex(string visualWordsPath);
-    ~ORBWordIndex();
+    ~ORBWordIndex() {};
     void knnSearch(const Mat &query, vector<int>& indices,
                    vector<int> &dists, int knn);
 
 private:
     bool readVisualWords(string fileName);
 
-    Mat *words;  // The matrix that stores the visual words.
-    cvflann::HierarchicalClusteringIndex<cvflann::Hamming<unsigned char> > *kdIndex; // The kd-tree index.
+    unique_ptr<Mat> words;  // The matrix that stores the visual words.
+    unique_ptr<FlannIndex> kdIndex; // The kd-tree index.
 };
 
 #endif // PASTEC_ORBWORDINDEX_H
