@@ -9,7 +9,9 @@ set(SOURCES     src/imagereranker.cpp
                 src/orb/orbfeatureextractor.cpp
                 src/orb/orbindex.cpp
                 src/orb/orbsearcher.cpp
-                src/orb/orbwordindex.cpp)
+                src/orb/orbwordindex.cpp
+                src/logging.cpp
+                src/imageadder.cpp)
 
 set(BIN_SOURCES src/main.cpp
                 src/httpserver.cpp

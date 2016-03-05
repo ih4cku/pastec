@@ -37,9 +37,11 @@
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/features2d/features2d.hpp>
 
-#include <orbsearcher.h>
-#include <messages.h>
-#include <imageloader.h>
+#include "orbsearcher.h"
+#include "messages.h"
+#include "imageloader.h"
+
+#include "logging.h"
 
 #ifndef __APPLE__
 using namespace std::tr1;
@@ -274,13 +276,20 @@ u_int32_t ORBSearcher::processSimilar(SearchRequest &request,
         rankedResults.push(SearchResult(it->second, it->first, Rect()));
     }
 
+#ifdef PASTEC_DEBUG
+    printRankedResult(rankedResults, "TF-IDF ranking result");
+#endif
+
     gettimeofday(&t[5], NULL);
     cout << "rankedResult time: " << getTimeDiff(t[4], t[5]) << " ms." << endl;
     cout << "Reranking 300 among " << rankedResults.size() << " images." << endl;
 
     priority_queue<SearchResult> rerankedResults;
-    reranker.rerank(imageReqHits, indexHits,
-                    rankedResults, rerankedResults, 300);
+    reranker.rerank(imageReqHits, indexHits, rankedResults, rerankedResults, 300);
+
+#ifdef PASTEC_DEBUG
+    printRankedResult(rerankedResults, "RANSAC reranking result");
+#endif
 
     gettimeofday(&t[6], NULL);
     cout << "time: " << getTimeDiff(t[5], t[6]) << " ms." << endl;

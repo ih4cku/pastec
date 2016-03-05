@@ -27,17 +27,14 @@
 #include <opencv2/core/core.hpp>
 #include <opencv2/flann/flann.hpp>
 
-#include <searcher.h>
-#include <orbindex.h>
-#include <orbwordindex.h>
-#include <searchResult.h>
-#include <imagereranker.h>
+#include "searcher.h"
+#include "orbindex.h"
+#include "orbwordindex.h"
+#include "searchResult.h"
+#include "imagereranker.h"
 
 using namespace cv;
 using namespace std;
-
-class ClientConnection;
-
 
 class ORBSearcher : public Searcher
 {
