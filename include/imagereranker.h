@@ -43,15 +43,15 @@ class ImageReranker
 {
 public:
     ImageReranker() {}
-    void rerank(std::unordered_map<u_int32_t, list<Hit> > &imagesReqHits,
-                std::unordered_map<u_int32_t, vector<Hit> > &indexHits,
-                priority_queue<SearchResult> &rankedResultsIn,
+    void rerank(const std::unordered_map<u_int32_t, list<Hit> > &imagesReqHits,
+                const std::unordered_map<u_int32_t, vector<Hit> > &indexHits,
+                const priority_queue<SearchResult> &rankedResultsIn,
                 priority_queue<SearchResult> &rankedResultsOut,
                 unsigned i_nbResults);
 
 private:
     float angleDiff(unsigned i_angle1, unsigned i_angle2);
-    void getFirstImageIds(priority_queue<SearchResult> &rankedResultsIn,
+    void getFirstImageIds(priority_queue<SearchResult> rankedResultsIn,
                           unsigned i_nbResults, unordered_set<u_int32_t> &firstImageIds);
 };
 

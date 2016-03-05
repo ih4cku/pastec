@@ -22,15 +22,15 @@
 #include <iostream>
 #include <cassert>
 #include <math.h>
-
 #include <algorithm>
 
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/features2d/features2d.hpp>
 #include <opencv2/calib3d/calib3d.hpp>
+#include <glog/logging.h>
 
-#include <imagereranker.h>
+#include "imagereranker.h"
 
 
 void *RANSACThread::run()
@@ -64,9 +64,9 @@ void *RANSACThread::run()
 }
 
 
-void ImageReranker::rerank(unordered_map<u_int32_t, list<Hit> > &imagesReqHits,
-                           unordered_map<u_int32_t, vector<Hit> > &indexHits,
-                           priority_queue<SearchResult> &rankedResultsIn,
+void ImageReranker::rerank(const unordered_map<u_int32_t, list<Hit> > &imagesReqHits,
+                           const unordered_map<u_int32_t, vector<Hit> > &indexHits,
+                           const priority_queue<SearchResult> &rankedResultsIn,
                            priority_queue<SearchResult> &rankedResultsOut,
                            unsigned i_nbResults)
 {
@@ -92,7 +92,9 @@ void ImageReranker::rerank(unordered_map<u_int32_t, list<Hit> > &imagesReqHits,
         // If there is several hits for the same word in the image...
         const u_int16_t i_angle1 = hits.front().i_angle;
         const Point2f point1(hits.front().x, hits.front().y);
-        const vector<Hit> &hitIndex = indexHits[i_wordId];
+        auto tmp_it = indexHits.find(i_wordId);
+        CHECK(tmp_it != indexHits.end()) << i_wordId << " not in indexHits.";
+        const vector<Hit> &hitIndex = tmp_it->second;
 
         for (unsigned i = 0; i < hitIndex.size(); ++i)
         {
@@ -172,7 +174,7 @@ private:
  * @param i_nbResults the number of images to return.
  * @param firstImageIds a set to return the image ids.
  */
-void ImageReranker::getFirstImageIds(priority_queue<SearchResult> &rankedResultsIn,
+void ImageReranker::getFirstImageIds(priority_queue<SearchResult> rankedResultsIn,
                                      unsigned i_nbResults, unordered_set<u_int32_t> &firstImageIds)
 {
     unsigned i_res = 0;

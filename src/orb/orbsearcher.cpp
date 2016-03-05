@@ -37,6 +37,8 @@
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/features2d/features2d.hpp>
 
+#include <glog/logging.h>
+
 #include "orbsearcher.h"
 #include "messages.h"
 #include "imageloader.h"
@@ -172,6 +174,7 @@ u_int32_t ORBSearcher::searchImage(SearchRequest &request)
     gettimeofday(&t[2], NULL);
     cout << "time: " << getTimeDiff(t[1], t[2]) << " ms." << endl;
 
+    LOG(INFO) << "request hits " << imageReqHits.size() << " words";
     return processSimilar(request, imageReqHits);
 }
 
@@ -202,7 +205,7 @@ u_int32_t ORBSearcher::searchSimilar(SearchRequest &request)
 
 
 u_int32_t ORBSearcher::processSimilar(SearchRequest &request,
-        std::unordered_map<u_int32_t, list<Hit> > imageReqHits)
+        const std::unordered_map<u_int32_t, list<Hit> > &imageReqHits)
 {
     timeval t[7];
     gettimeofday(&t[0], NULL);
