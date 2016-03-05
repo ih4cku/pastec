@@ -50,7 +50,7 @@ using namespace std::tr1;
 #endif
 
 ORBSearcher::ORBSearcher(ORBIndex *index, ORBWordIndex *wordIndex)
-    : index(index), wordIndex(wordIndex)
+    : index_(index), wordIndex_(wordIndex)
 { }
 
 
@@ -63,10 +63,10 @@ ORBSearcher::~ORBSearcher()
  * This threads computes the tf-idf weights of the images that contains the words
  * given in argument.
  */
-class RankingThread : public Thread
+class TfidfCalcThread : public Thread
 {
 public:
-    RankingThread(ORBIndex *index, const unsigned i_nbTotalIndexedImages,
+    TfidfCalcThread(ORBIndex *index, const unsigned i_nbTotalIndexedImages,
                   std::unordered_map<u_int32_t, vector<Hit> > &indexHits)
         : index_(index), i_nbTotalIndexedImages_(i_nbTotalIndexedImages),
           indexHits_(indexHits) { }
@@ -135,7 +135,7 @@ u_int32_t ORBSearcher::searchImage(SearchRequest &request)
     cout << "time: " << getTimeDiff(t[0], t[1]) << " ms." << endl;
     cout << "Looking for the visual words. " << endl;
 
-    const unsigned i_nbTotalIndexedImages = index->getTotalNbIndexedImages();
+    const unsigned i_nbTotalIndexedImages = index_->getTotalNbIndexedImages();
     const unsigned i_maxNbOccurences = i_nbTotalIndexedImages > 10000 ?
                                        0.15 * i_nbTotalIndexedImages
                                        : i_nbTotalIndexedImages;
@@ -147,14 +147,14 @@ u_int32_t ORBSearcher::searchImage(SearchRequest &request)
 
         vector<int> indices(NB_NEIGHBORS);
         vector<int> dists(NB_NEIGHBORS);
-        wordIndex->knnSearch(descriptors.row(i), indices,
+        wordIndex_->knnSearch(descriptors.row(i), indices,
                            dists, NB_NEIGHBORS);
 
         for (unsigned j = 0; j < indices.size(); ++j)
         {
             const unsigned i_wordId = indices[j];
 
-            if (index->getWordNbOccurences(i_wordId) > i_maxNbOccurences)
+            if (index_->getWordNbOccurences(i_wordId) > i_maxNbOccurences)
                 continue;
 
             if (imageReqHits.find(i_wordId) == imageReqHits.end())
@@ -192,7 +192,7 @@ u_int32_t ORBSearcher::searchSimilar(SearchRequest &request)
 
     // key: visual word, value: the found angles
     std::unordered_map<u_int32_t, list<Hit> > imageReqHits;
-    u_int32_t i_ret = index->getImageWords(request.imageId, imageReqHits);
+    u_int32_t i_ret = index_->getImageWords(request.imageId, imageReqHits);
 
     if (i_ret != OK)
         return i_ret;
@@ -210,31 +210,31 @@ u_int32_t ORBSearcher::processSimilar(SearchRequest &request,
     timeval t[7];
     gettimeofday(&t[0], NULL);
 
-    const unsigned i_nbTotalIndexedImages = index->getTotalNbIndexedImages();
+    const unsigned i_nbTotalIndexedImages = index_->getTotalNbIndexedImages();
 
     cout << imageReqHits.size() << " visual words kept for the request." << endl;
     cout << i_nbTotalIndexedImages << " images indexed in the index." << endl;
 
     std::unordered_map<u_int32_t, vector<Hit> > indexHits; // key: visual word id, values: index hits.
     indexHits.rehash(imageReqHits.size());
-    index->getImagesWithVisualWords(imageReqHits, indexHits);
+    index_->getImagesWithVisualWords(imageReqHits, indexHits);
 
     gettimeofday(&t[1], NULL);
     cout << "time: " << getTimeDiff(t[0], t[1]) << " ms." << endl;
     cout << "Ranking the images." << endl;
 
     //--------------------- tfidf --------------------- 
-    index->readLock();
+    index_->readLock();
     #define NB_RANKING_THREAD 4
 
     // Map the ranking to threads.
     unsigned i_wordsPerThread = indexHits.size() / NB_RANKING_THREAD + 1;
-    RankingThread *threads[NB_RANKING_THREAD];
+    unique_ptr<TfidfCalcThread> threads[NB_RANKING_THREAD];
 
     std::unordered_map<u_int32_t, vector<Hit> >::const_iterator it = indexHits.begin();
     for (unsigned i = 0; i < NB_RANKING_THREAD; ++i)
     {
-        threads[i] = new RankingThread(index, i_nbTotalIndexedImages, indexHits);
+        threads[i] = unique_ptr<TfidfCalcThread>(new TfidfCalcThread(index_, i_nbTotalIndexedImages, indexHits));
 
         unsigned i_nbWords = 0;
         for (; it != indexHits.end() && i_nbWords < i_wordsPerThread; ++it, ++i_nbWords)
@@ -264,11 +264,7 @@ u_int32_t ORBSearcher::processSimilar(SearchRequest &request,
     gettimeofday(&t[4], NULL);
     cout << "reduce time: " << getTimeDiff(t[3], t[4]) << " ms." << endl;
 
-    // Free the memory
-    for (unsigned i = 0; i < NB_RANKING_THREAD; ++i)
-        delete threads[i];
-
-    index->unlock();
+    index_->unlock();
 
     //--------------------- RANSAC --------------------- 
     priority_queue<SearchResult> rankedResults;
@@ -288,7 +284,7 @@ u_int32_t ORBSearcher::processSimilar(SearchRequest &request,
     cout << "Reranking 300 among " << rankedResults.size() << " images." << endl;
 
     priority_queue<SearchResult> rerankedResults;
-    reranker.rerank(imageReqHits, indexHits, rankedResults, rerankedResults, 300);
+    reranker_.rerank(imageReqHits, indexHits, rankedResults, rerankedResults, 300);
 
 #ifdef PASTEC_DEBUG
     printRankedResult(rerankedResults, "RANSAC reranking result");
@@ -328,7 +324,7 @@ void ORBSearcher::returnResults(priority_queue<SearchResult> &rankedResults,
         req.scores.push_back(res.f_weight);
 
         string tag;
-        if (index->getTag(res.i_imageId, tag) == OK)
+        if (index_->getTag(res.i_imageId, tag) == OK)
             req.tags.push_back(tag);
         else
             req.tags.push_back("");

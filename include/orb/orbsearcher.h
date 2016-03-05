@@ -51,9 +51,9 @@ private:
     u_int32_t processSimilar(SearchRequest &request,
                              const std::unordered_map<u_int32_t, list<Hit> > &imageReqHits);
 
-    ORBIndex *index;
-    ORBWordIndex *wordIndex;
-    ImageReranker reranker;
+    ORBIndex *index_;
+    ORBWordIndex *wordIndex_;
+    ImageReranker reranker_;
 };
 
 #endif // PASTEC_IMAGESEARCHER_H
