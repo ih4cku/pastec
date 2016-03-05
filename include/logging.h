@@ -6,6 +6,8 @@
 
 #include "searchResult.h"
 
-void printRankedResult(std::priority_queue<SearchResult> ranked_res, std::string log_info);
+#define DEBUG_ID_STRING "LIBRARY_IMAGE_ID: "
+
+void printPriorityQueue(std::priority_queue<SearchResult> ranked_res, std::string log_info);
 
 #endif

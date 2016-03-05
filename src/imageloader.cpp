@@ -24,10 +24,33 @@
 
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/highgui/highgui.hpp>
+#include <glog/logging.h>
 
-#include <imageloader.h>
-#include <messages.h>
+#include "imageloader.h"
+#include "messages.h"
 
+#define IMAGE_MAX_SIZE 1000
+
+void ImageLoader::normImageSize(Mat &img) 
+{
+    int img_wid = img.cols;
+    int img_hei = img.rows;
+
+    CHECK(img_wid > 150 && img_hei > 150) << "image too small: " << img.size;
+
+    if (img_wid > IMAGE_MAX_SIZE || img_hei > IMAGE_MAX_SIZE) {
+        Size size;
+        if (img_wid > img_hei) {
+            size.width = IMAGE_MAX_SIZE;
+            size.height = (float)img_hei / img_wid * IMAGE_MAX_SIZE;
+        } else {
+            size.width = (float)img_wid / img_hei * IMAGE_MAX_SIZE;
+            size.height = IMAGE_MAX_SIZE;
+        }
+        resize(img, img, size);
+        LOG(INFO) << "Image resize to " << size;
+    }
+}
 
 u_int32_t ImageLoader::loadImage(unsigned i_imgSize, char *p_imgData, Mat &img)
 {
@@ -51,37 +74,14 @@ u_int32_t ImageLoader::loadImage(unsigned i_imgSize, char *p_imgData, Mat &img)
         return IMAGE_NOT_DECODED;
     }
 
-    unsigned i_imgWidth = img.cols;
-    unsigned i_imgHeight = img.rows;
-
-
-    if (i_imgWidth > 1000
-        || i_imgHeight > 1000)
-    {
-        cout << "Image too large, resizing." << endl;
-        Size size;
-        if (i_imgWidth > i_imgHeight)
-        {
-            size.width = 1000;
-            size.height = (float)i_imgHeight / i_imgWidth * 1000;
-        }
-        else
-        {
-            size.width = (float)i_imgWidth / i_imgHeight * 1000;
-            size.height = 1000;
-        }
-        resize(img, img, size);
-        return OK;
-    }
-
-#if 1
-    if (i_imgWidth < 150
-        || i_imgHeight < 150)
-    {
-        cout << "Image too small." << endl;
-        return IMAGE_SIZE_TOO_SMALL;
-    }
-#endif
+    normImageSize(img);
 
     return OK;
+}
+
+u_int32_t ImageLoader::loadImage(string image_path, Mat &img)
+{
+    img = imread(image_path, CV_LOAD_IMAGE_GRAYSCALE);
+    CHECK(img.data) << "error reading " << image_path;
+    normImageSize(img);
 }

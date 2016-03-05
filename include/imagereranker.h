@@ -32,17 +32,20 @@
 #include <opencv2/core/core.hpp>
 
 #include <thread.h>
-#include <searchResult.h>
-#include <hit.h>
+
+#include "searchResult.h"
+#include "hit.h"
+#include "orb/orbsearcher.h"
 
 using namespace std;
 using namespace cv;
 
+class ORBSearcher;
 
 class ImageReranker
 {
 public:
-    ImageReranker() {}
+    ImageReranker(ORBSearcher *sch) : searcher_(sch) {}
     void rerank(const std::unordered_map<u_int32_t, list<Hit> > &imagesReqHits,
                 const std::unordered_map<u_int32_t, vector<Hit> > &indexHits,
                 const priority_queue<SearchResult> &rankedResultsIn,
@@ -50,6 +53,7 @@ public:
                 unsigned i_nbResults);
 
 private:
+    ORBSearcher *searcher_;
     float angleDiff(unsigned i_angle1, unsigned i_angle2);
     void getFirstImageIds(priority_queue<SearchResult> rankedResultsIn,
                           unsigned i_nbResults, unordered_set<u_int32_t> &firstImageIds);
@@ -64,7 +68,7 @@ struct RANSACTask
 };
 
 
-#define HISTOGRAM_NB_BINS 32
+#define HISTOGRAM_NB_BINS 36
 #define DIFF_MIN -360.0f / (2.0f * HISTOGRAM_NB_BINS)
 
 
@@ -80,6 +84,7 @@ struct Histogram
 };
 
 
+#define HISTOGRAM_MIN_VALUE 10
 #define RANSAC_MIN_INLINERS 12
 
 
@@ -88,8 +93,10 @@ class RANSACThread : public Thread
 public:
     RANSACThread(pthread_mutex_t &mutex,
                  std::unordered_map<u_int32_t, RANSACTask> &imgTasks,
-                 priority_queue<SearchResult> &rankedResultsOut)
-        : mutex_(mutex), imgTasks_(imgTasks), rankedResultsOut_(rankedResultsOut)
+                 priority_queue<SearchResult> &rankedResultsOut,
+                 Mat reqImg, ORBIndex *index)
+        : mutex_(mutex), imgTasks_(imgTasks), rankedResultsOut_(rankedResultsOut),
+          reqImage_(reqImg), index_(index)
     { }
 
 public:
@@ -102,6 +109,8 @@ public:
     deque<Histogram> histograms_;
 
 private:
+    Mat reqImage_;
+    ORBIndex *index_;
     void getRTMatrix(const Point2f* a, const Point2f* b,
                      int count, Mat& M, bool fullAffine);
     cv::Mat pastecEstimateRigidTransform(InputArray src1, InputArray src2,

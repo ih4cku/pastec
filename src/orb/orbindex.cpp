@@ -26,9 +26,10 @@
 #include <algorithm>
 #include <sys/time.h>
 #include <assert.h>
+#include <glog/logging.h>
 
-#include <orbindex.h>
-#include <messages.h>
+#include "orbindex.h"
+#include "messages.h"
 
 
 ORBIndex::ORBIndex(string indexPath, bool buildForwardIndex)
@@ -140,7 +141,7 @@ u_int32_t ORBIndex::addImage(unsigned i_imageId, list<HitForward> hitList)
     pthread_rwlock_unlock(&rwLock);
 
     if (!hitList.empty())
-        cout << "Image " << hitList.begin()->i_imageId << " added: "
+        LOG(INFO) << "Image " << i_imageId << " added: "
              << hitList.size() << " hits." << endl;
 
     return IMAGE_ADDED;
@@ -164,7 +165,7 @@ u_int32_t ORBIndex::addTag(const unsigned i_imageId, const string tag)
 
     pthread_rwlock_unlock(&rwLock);
 
-    cout << "Tag added for image " << i_imageId << "." << endl;
+    LOG(INFO) << "add tag for " << i_imageId << ": " << tag;
 
     return IMAGE_TAG_ADDED;
 }
@@ -433,7 +434,7 @@ u_int32_t ORBIndex::clear()
     totalNbRecords_ = 0;
     pthread_rwlock_unlock(&rwLock);
 
-    cout << "Index cleared." << endl;
+    LOG(INFO) << "Index cleared.";
 
     return INDEX_CLEARED;
 }
@@ -452,7 +453,7 @@ u_int32_t ORBIndex::load(string backwardIndexPath)
     BackwardIndexReaderFileAccess indexAccess;
     if (!indexAccess.open(backwardIndexPath))
     {
-        cout << "Could not open the backward index file." << endl;
+        LOG(INFO) << "Could not open the backward index file.";
         i_ret = INDEX_NOT_FOUND;
     }
     else
@@ -463,7 +464,7 @@ u_int32_t ORBIndex::load(string backwardIndexPath)
 
         /* Read the table to know where are located the lines corresponding to each
          * visual word. */
-        cout << "Reading the numbers of occurences." << endl;
+        LOG(INFO) << "Reading the numbers of occurences.";
         u_int64_t *wordOffSet = new u_int64_t[NB_VISUAL_WORDS];
         u_int64_t i_offset = NB_VISUAL_WORDS * sizeof(u_int64_t);
         for (unsigned i = 0; i < NB_VISUAL_WORDS; ++i)
@@ -474,7 +475,7 @@ u_int32_t ORBIndex::load(string backwardIndexPath)
         }
 
         /* Count the number of words per image. */
-        cout << "Counting the number of words per image." << endl;
+        LOG(INFO) << "Counting the number of words per image.";
         totalNbRecords_ = 0;
         while (true)
         {
@@ -492,7 +493,7 @@ u_int32_t ORBIndex::load(string backwardIndexPath)
 
         indexAccess.reset();
 
-        cout << "Loading the index in memory." << endl;
+        LOG(INFO) << "Loading the index in memory.";
 
         for (unsigned i_wordId = 0; i_wordId < NB_VISUAL_WORDS; ++i_wordId)
         {
@@ -549,7 +550,7 @@ u_int32_t ORBIndex::loadTags(string indexTagsPath)
     ifs.open(indexTagsPath.c_str(), ios_base::binary);
     if (!ifs.good())
     {
-        cout << "Could not open the index tags file." << endl;
+        LOG(INFO) << "Could not open the index tags file.";
         return INDEX_TAGS_NOT_FOUND;
     }
 
@@ -568,7 +569,7 @@ u_int32_t ORBIndex::loadTags(string indexTagsPath)
         char psz_tag[i_tagSize];
         ifs.read((char *)psz_tag, i_tagSize);
 
-        cout << i_imageId << " " << i_tagSize << " " << psz_tag << endl;
+        LOG(INFO) << "image id:" << i_imageId << ", tag:" << psz_tag;
 
         // Save it into the memory.
         tags_[i_imageId] = string(psz_tag);

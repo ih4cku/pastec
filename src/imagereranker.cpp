@@ -23,6 +23,7 @@
 #include <cassert>
 #include <math.h>
 #include <algorithm>
+#include <memory>
 
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/highgui/highgui.hpp>
@@ -31,7 +32,29 @@
 #include <glog/logging.h>
 
 #include "imagereranker.h"
+#include "imageloader.h"
+#include "logging.h"
 
+using namespace cv;
+using namespace std;
+
+// build keypoints and matches with task
+void buildMatches(const RANSACTask &task, vector<KeyPoint> &kps_index, vector<KeyPoint> &kps_req, vector<DMatch> &matches) 
+{
+    const vector<Point2f> &req_pts = task.points1;
+    const vector<Point2f> &index_pts = task.points2;
+    CHECK(req_pts.size() == index_pts.size()) << "req_pts.size() != index_pts.size()";
+
+    int num_pts = req_pts.size();
+    for(int i = 0; i < num_pts; ++i) {
+        KeyPoint _kp_idx, _kp_req;
+        _kp_idx.pt = index_pts[i];
+        _kp_req.pt = req_pts[i];
+        kps_index.push_back(_kp_idx);
+        kps_req.push_back(_kp_req);
+        matches.push_back(DMatch(i, i, -1));
+    }
+}
 
 void *RANSACThread::run()
 {
@@ -41,7 +64,35 @@ void *RANSACThread::run()
         const Histogram histogram = histograms_[i];
         unsigned i_binMax = max_element(histogram.bins, histogram.bins + HISTOGRAM_NB_BINS) - histogram.bins;
         float i_maxVal = histogram.bins[i_binMax];
-        if (i_maxVal > 10)
+
+#ifdef PASTEC_DEBUG
+        string s_ok = " bad";
+        if (i_maxVal >= HISTOGRAM_MIN_VALUE && imgTasks_[i_imageId].points1.size() >= RANSAC_MIN_INLINERS)
+            s_ok = " good";
+        LOG(INFO) << DEBUG_ID_STRING << i_imageId <<  s_ok\
+                  << ", max bin: " << i_maxVal \
+                  << ", matched points: " << imgTasks_[i_imageId].points1.size();
+        
+        string image_path;
+        index_->getTag(i_imageId, image_path);
+        Mat img_index;
+        ImageLoader::loadImage(image_path, img_index);
+
+        vector<KeyPoint> kps_index, kps_req;
+        vector<DMatch> matches;
+        buildMatches(imgTasks_[i_imageId], kps_index, kps_req, matches);
+
+        Mat img_match;
+        drawMatches(img_index, kps_index, reqImage_, kps_req, matches, img_match);
+
+        ostringstream oss;
+        oss << i_imageId << ".jpg";
+        imwrite(oss.str(), img_match);
+        LOG(INFO) << DEBUG_ID_STRING << i_imageId << ", matches save to: " << oss.str();
+#endif
+
+
+        if (i_maxVal >= HISTOGRAM_MIN_VALUE)
         {
             RANSACTask &task = imgTasks_[i_imageId];
             assert(task.points1.size() == task.points2.size());
@@ -51,7 +102,12 @@ void *RANSACThread::run()
                 Mat H = pastecEstimateRigidTransform(task.points2, task.points1, true);
 
                 if (countNonZero(H) == 0)
+                {
+#ifdef PASTEC_DEBUG
+                    LOG(INFO) << DEBUG_ID_STRING << i_imageId << ", H zeros: " << countNonZero(H);
+#endif
                     continue;
+                }
 
                 Rect bRect1 = boundingRect(task.points1);
 
@@ -70,12 +126,20 @@ void ImageReranker::rerank(const unordered_map<u_int32_t, list<Hit> > &imagesReq
                            priority_queue<SearchResult> &rankedResultsOut,
                            unsigned i_nbResults)
 {
-    unordered_set<u_int32_t> firstImageIds;
+    unordered_set<u_int32_t> topImageIds;
 
     // Extract the first i_nbResults ranked images.
-    getFirstImageIds(rankedResultsIn, i_nbResults, firstImageIds);
-
-    unordered_map<u_int32_t, RANSACTask> imgTasks;
+    getFirstImageIds(rankedResultsIn, i_nbResults, topImageIds);
+    
+#ifdef PASTEC_DEBUG
+    ostringstream oss;
+    oss << "Top " << i_nbResults << " image ids (unordered): ";
+    for (auto &e : topImageIds)
+        oss << e << ", ";
+    LOG(INFO) << oss.str();
+#endif
+    
+    unordered_map<u_int32_t, RANSACTask> imgTasks; // key: library image id, value: matching points
 
     // Compute the histograms.
     unordered_map<u_int32_t, Histogram> histograms; // key: the image id, value: the corresponding histogram.
@@ -94,15 +158,15 @@ void ImageReranker::rerank(const unordered_map<u_int32_t, list<Hit> > &imagesReq
         const Point2f point1(hits.front().x, hits.front().y);
         auto tmp_it = indexHits.find(i_wordId);
         CHECK(tmp_it != indexHits.end()) << i_wordId << " not in indexHits.";
-        const vector<Hit> &hitIndex = tmp_it->second;
+        const vector<Hit> &hitsOfWord = tmp_it->second;
 
-        for (unsigned i = 0; i < hitIndex.size(); ++i)
+        for (unsigned i = 0; i < hitsOfWord.size(); ++i)
         {
-            const u_int32_t i_imageId = hitIndex[i].i_imageId;
+            const u_int32_t i_imageId = hitsOfWord[i].i_imageId;
             // Test if the image belongs to the image to rerank.
-            if (firstImageIds.find(i_imageId) != firstImageIds.end())
+            if (topImageIds.find(i_imageId) != topImageIds.end())
             {
-                const u_int16_t i_angle2 = hitIndex[i].i_angle;
+                const u_int16_t i_angle2 = hitsOfWord[i].i_angle;
                 float f_diff = angleDiff(i_angle1, i_angle2);
                 unsigned bin = (f_diff - DIFF_MIN) / 360 * HISTOGRAM_NB_BINS;
                 assert(bin < HISTOGRAM_NB_BINS);
@@ -111,7 +175,7 @@ void ImageReranker::rerank(const unordered_map<u_int32_t, list<Hit> > &imagesReq
                 histogram.bins[bin]++;
                 histogram.i_total++;
 
-                const Point2f point2(hitIndex[i].x, hitIndex[i].y);
+                const Point2f point2(hitsOfWord[i].x, hitsOfWord[i].y);
                 RANSACTask &imgTask = imgTasks[i_imageId];
 
                 imgTask.points1.push_back(point1);
@@ -123,10 +187,11 @@ void ImageReranker::rerank(const unordered_map<u_int32_t, list<Hit> > &imagesReq
     pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
     #define NB_RANSAC_THREAD 4
-    RANSACThread *threads[NB_RANSAC_THREAD];
+    unique_ptr<RANSACThread> threads[NB_RANSAC_THREAD];
 
     for (unsigned i = 0; i < NB_RANSAC_THREAD; ++i)
-        threads[i] = new RANSACThread(mutex, imgTasks, rankedResultsOut);
+        threads[i] = unique_ptr<RANSACThread>(new RANSACThread(mutex, imgTasks, rankedResultsOut,
+                                                               searcher_->reqImage_, searcher_->index_));
 
     // Rank the images according to their histogram.
     unsigned i = 0;
@@ -139,14 +204,14 @@ void ImageReranker::rerank(const unordered_map<u_int32_t, list<Hit> > &imagesReq
         threads[i % NB_RANSAC_THREAD]->histograms_.push_back(histogram);
     }
 
+    LOG(INFO) << "HISTOGRAM_MIN_VALUE: " << HISTOGRAM_MIN_VALUE;
+    LOG(INFO) << "RANSAC_MIN_INLINERS: " << RANSAC_MIN_INLINERS;
+
     // Compute
     for (unsigned i = 0; i < NB_RANSAC_THREAD; ++i)
         threads[i]->start();
     for (unsigned i = 0; i < NB_RANSAC_THREAD; ++i)
-    {
         threads[i]->join();
-        delete threads[i];
-    }
 
     pthread_mutex_destroy(&mutex);
 }
@@ -195,8 +260,8 @@ float ImageReranker::angleDiff(unsigned i_angle1, unsigned i_angle2)
     float i1 = (float)i_angle1 * 360 / (1 << 16);
     float i2 = (float)i_angle2 * 360 / (1 << 16);
 
-    i1 = i1 <= 180 ? i1 : i1 - 360;
-    i2 = i2 <= 180 ? i2 : i2 - 360;
+    i1 = (i1 <= 180) ? i1 : (i1 - 360);
+    i2 = (i2 <= 180) ? i2 : (i2 - 360);
 
     // Compute the difference between the two angles.
     float diff = i1 - i2;

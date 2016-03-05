@@ -98,7 +98,7 @@ void ORBWordIndex::knnSearch(const Mat& query, vector<int>& indices,
  */
 bool ORBWordIndex::readVisualWords(string fileName)
 {
-    cout << "Reading the visual words file." << endl;
+    LOG(INFO) << "Reading the visual words file.";
 
     // Open the input file.
     ifstream ifs;
@@ -106,7 +106,7 @@ bool ORBWordIndex::readVisualWords(string fileName)
 
     if (!ifs.good())
     {
-        cout << "Could not open the input file." << endl;
+        LOG(INFO) << "Could not open the input file.";
         return false;
     }
 

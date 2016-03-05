@@ -8,48 +8,30 @@
 #include <opencv2/features2d/features2d.hpp>
 
 #include "imageadder.h"
+#include "imageloader.h"
 
 using namespace std;
 using namespace cv;
 
-void normImageSize(Mat img) {
-    int img_wid = img.rows;
-    int img_hei = img.cols;
 
-    CHECK(img_wid > 150 && img_hei > 150) << "image too small: " << img.size;
-
-    if (img_wid > 1000 || img_hei > 1000) {
-        cout << "Image too large, resizing." << endl;
-        Size size;
-        if (img_wid > img_hei) {
-            size.width = 1000;
-            size.height = (float)img_hei / img_wid * 1000;
-        } else {
-            size.width = (float)img_wid / img_hei * 1000;
-            size.height = 1000;
-        }
-        resize(img, img, size);
-    }
-}
-
-void ImageAdder::addImage(string image_path, int image_id, int &num_feat_extracted) {
-    Mat img = imread(image_path, CV_LOAD_IMAGE_GRAYSCALE);
-    CHECK(img.data) << "error reading " << image_path;
-
-    normImageSize(img);
-    LOG(INFO) << img.size() << endl;
-
+void ImageAdder::addImage(string image_path, int image_id, int &num_feat_extracted) 
+{
+    Mat img;
+    ImageLoader::loadImage(image_path, img);
+    LOG(INFO) << "adding " << image_path << img.size();
+    
     vector<KeyPoint> keypoints;
     Mat descriptors;
 
     ORB(1000, 1.09, 16)(img, noArray(), keypoints, descriptors);
     num_feat_extracted = keypoints.size();
+    LOG(INFO) << num_feat_extracted << " features extracted.";
 
     list<HitForward> imageHits;
     unordered_set<u_int32_t> matchedWords;
 
     // record for visualization
-#ifdef DUMP_FEAT_IMAGE
+#ifdef PASTEC_DEBUG
     vector<KeyPoint> keep_keypoints;
 #endif
 
@@ -77,7 +59,7 @@ void ImageAdder::addImage(string image_path, int image_id, int &num_feat_extract
                 newHit.y = y;
                 imageHits.push_back(newHit);
                 matchedWords.insert(word_id);
-#ifdef DUMP_FEAT_IMAGE
+#ifdef PASTEC_DEBUG
                 keep_keypoints.push_back(keypoints[i]);
 #endif
             }
@@ -85,7 +67,7 @@ void ImageAdder::addImage(string image_path, int image_id, int &num_feat_extract
     }
 
 
-#ifdef DUMP_FEAT_IMAGE
+#ifdef PASTEC_DEBUG
     LOG(INFO) << "total keypoints: " << num_feat_extracted;
     LOG(INFO) << "keeped keypoints: " << keep_keypoints.size();
 
@@ -93,10 +75,11 @@ void ImageAdder::addImage(string image_path, int image_id, int &num_feat_extract
     Mat img_res;
     drawKeypoints(img, keypoints, img_res, Scalar::all(-1), DrawMatchesFlags::DEFAULT);
     ostringstream oss;
-    oss << "debug/" << image_id << ".jpg";
+    oss << image_id << "_feats.jpg";
     imwrite(oss.str(), img_res);
 #endif
 
     // Record the hits.
-    index_->addImage(image_id, imageHits);    
+    index_->addImage(image_id, imageHits);
+    index_->addTag(image_id, image_path);
 }

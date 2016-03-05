@@ -21,6 +21,7 @@
 
 #include <iostream>
 #include <fstream>
+#include <memory>
 #include <sys/time.h>
 
 #include <set>
@@ -51,7 +52,9 @@ using namespace std::tr1;
 
 ORBSearcher::ORBSearcher(ORBIndex *index, ORBWordIndex *wordIndex)
     : index_(index), wordIndex_(wordIndex)
-{ }
+{ 
+    reranker_ = unique_ptr<ImageReranker>(new ImageReranker(this));
+}
 
 
 ORBSearcher::~ORBSearcher()
@@ -63,10 +66,10 @@ ORBSearcher::~ORBSearcher()
  * This threads computes the tf-idf weights of the images that contains the words
  * given in argument.
  */
-class TfidfCalcThread : public Thread
+class TfidfThread : public Thread
 {
 public:
-    TfidfCalcThread(ORBIndex *index, const unsigned i_nbTotalIndexedImages,
+    TfidfThread(ORBIndex *index, const unsigned i_nbTotalIndexedImages,
                   std::unordered_map<u_int32_t, vector<Hit> > &indexHits)
         : index_(index), i_nbTotalIndexedImages_(i_nbTotalIndexedImages),
           indexHits_(indexHits) { }
@@ -117,23 +120,23 @@ u_int32_t ORBSearcher::searchImage(SearchRequest &request)
     timeval t[3];
     gettimeofday(&t[0], NULL);
 
-    cout << "Loading the image and extracting the ORBs." << endl;
+    LOG(INFO) << "Loading the image and extracting the ORBs.";
 
-    Mat img;
     u_int32_t i_ret = ImageLoader::loadImage(request.imageData.size(),
-                                             request.imageData.data(), img);
+                                             request.imageData.data(), reqImage_);
+
     if (i_ret != OK)
         return i_ret;
 
     vector<KeyPoint> keypoints;
     Mat descriptors;
 
-    ORB(2000, 1.02, 100)(img, noArray(), keypoints, descriptors);
+    ORB(2000, 1.02, 100)(reqImage_, noArray(), keypoints, descriptors);
 
     gettimeofday(&t[1], NULL);
 
-    cout << "time: " << getTimeDiff(t[0], t[1]) << " ms." << endl;
-    cout << "Looking for the visual words. " << endl;
+    LOG(INFO) << "time: " << getTimeDiff(t[0], t[1]) << " ms.";
+    LOG(INFO) << "Looking for the visual words.";
 
     const unsigned i_nbTotalIndexedImages = index_->getTotalNbIndexedImages();
     const unsigned i_maxNbOccurences = i_nbTotalIndexedImages > 10000 ?
@@ -165,14 +168,13 @@ u_int32_t ORBSearcher::searchImage(SearchRequest &request)
                 hit.i_angle = keypoints[i].angle / 360 * (1 << 16);
                 hit.x = keypoints[i].pt.x;
                 hit.y = keypoints[i].pt.y;
-
                 imageReqHits[i_wordId].push_back(hit);
             }
         }
     }
 
     gettimeofday(&t[2], NULL);
-    cout << "time: " << getTimeDiff(t[1], t[2]) << " ms." << endl;
+    LOG(INFO) << "time: " << getTimeDiff(t[1], t[2]) << " ms.";
 
     LOG(INFO) << "request hits " << imageReqHits.size() << " words";
     return processSimilar(request, imageReqHits);
@@ -212,29 +214,29 @@ u_int32_t ORBSearcher::processSimilar(SearchRequest &request,
 
     const unsigned i_nbTotalIndexedImages = index_->getTotalNbIndexedImages();
 
-    cout << imageReqHits.size() << " visual words kept for the request." << endl;
-    cout << i_nbTotalIndexedImages << " images indexed in the index." << endl;
+    LOG(INFO) << imageReqHits.size() << " visual words kept for the request.";
+    LOG(INFO) << i_nbTotalIndexedImages << " images indexed in the index.";
 
     std::unordered_map<u_int32_t, vector<Hit> > indexHits; // key: visual word id, values: index hits.
     indexHits.rehash(imageReqHits.size());
     index_->getImagesWithVisualWords(imageReqHits, indexHits);
 
     gettimeofday(&t[1], NULL);
-    cout << "time: " << getTimeDiff(t[0], t[1]) << " ms." << endl;
-    cout << "Ranking the images." << endl;
+    LOG(INFO) << "time: " << getTimeDiff(t[0], t[1]) << " ms.";
+    LOG(INFO) << "Ranking the images.";
 
-    //--------------------- tfidf --------------------- 
+    //--------------------- Tf-Idf --------------------- 
     index_->readLock();
     #define NB_RANKING_THREAD 4
 
     // Map the ranking to threads.
     unsigned i_wordsPerThread = indexHits.size() / NB_RANKING_THREAD + 1;
-    unique_ptr<TfidfCalcThread> threads[NB_RANKING_THREAD];
+    unique_ptr<TfidfThread> threads[NB_RANKING_THREAD];
 
     std::unordered_map<u_int32_t, vector<Hit> >::const_iterator it = indexHits.begin();
     for (unsigned i = 0; i < NB_RANKING_THREAD; ++i)
     {
-        threads[i] = unique_ptr<TfidfCalcThread>(new TfidfCalcThread(index_, i_nbTotalIndexedImages, indexHits));
+        threads[i] = unique_ptr<TfidfThread>(new TfidfThread(index_, i_nbTotalIndexedImages, indexHits));
 
         unsigned i_nbWords = 0;
         for (; it != indexHits.end() && i_nbWords < i_wordsPerThread; ++it, ++i_nbWords)
@@ -242,7 +244,7 @@ u_int32_t ORBSearcher::processSimilar(SearchRequest &request,
     }
 
     gettimeofday(&t[2], NULL);
-    cout << "init threads time: " << getTimeDiff(t[1], t[2]) << " ms." << endl;
+    LOG(INFO) << "init threads time: " << getTimeDiff(t[1], t[2]) << " ms.";
 
     // Compute
     for (unsigned i = 0; i < NB_RANKING_THREAD; ++i)
@@ -251,7 +253,7 @@ u_int32_t ORBSearcher::processSimilar(SearchRequest &request,
         threads[i]->join();
 
     gettimeofday(&t[3], NULL);
-    cout << "compute time: " << getTimeDiff(t[2], t[3]) << " ms." << endl;
+    LOG(INFO) << "compute time: " << getTimeDiff(t[2], t[3]) << " ms.";
 
     // Reduce...
     std::unordered_map<u_int32_t, float> weights; // key: image id, value: image score.
@@ -262,11 +264,10 @@ u_int32_t ORBSearcher::processSimilar(SearchRequest &request,
             weights[it->first] += it->second;
 
     gettimeofday(&t[4], NULL);
-    cout << "reduce time: " << getTimeDiff(t[3], t[4]) << " ms." << endl;
+    LOG(INFO) << "reduce time: " << getTimeDiff(t[3], t[4]) << " ms.";
 
     index_->unlock();
 
-    //--------------------- RANSAC --------------------- 
     priority_queue<SearchResult> rankedResults;
     for (std::unordered_map<unsigned, float>::const_iterator it = weights.begin();
          it != weights.end(); ++it)
@@ -276,23 +277,25 @@ u_int32_t ORBSearcher::processSimilar(SearchRequest &request,
     }
 
 #ifdef PASTEC_DEBUG
-    printRankedResult(rankedResults, "TF-IDF ranking result");
+    printPriorityQueue(rankedResults, "[TF-IDF ranking result] ");
 #endif
 
+    int top_k_rerank = 300;
     gettimeofday(&t[5], NULL);
-    cout << "rankedResult time: " << getTimeDiff(t[4], t[5]) << " ms." << endl;
-    cout << "Reranking 300 among " << rankedResults.size() << " images." << endl;
+    LOG(INFO) << "rankedResult time: " << getTimeDiff(t[4], t[5]) << " ms.";
+    LOG(INFO) << "Reranking " << top_k_rerank << " among " << rankedResults.size() << " images.";
 
+    //--------------------- RANSAC --------------------- 
     priority_queue<SearchResult> rerankedResults;
-    reranker_.rerank(imageReqHits, indexHits, rankedResults, rerankedResults, 300);
+    reranker_->rerank(imageReqHits, indexHits, rankedResults, rerankedResults, top_k_rerank);
 
 #ifdef PASTEC_DEBUG
-    printRankedResult(rerankedResults, "RANSAC reranking result");
+    printPriorityQueue(rerankedResults, "[RANSAC reranking result] ");
 #endif
 
     gettimeofday(&t[6], NULL);
-    cout << "time: " << getTimeDiff(t[5], t[6]) << " ms." << endl;
-    cout << "Returning the results. " << endl;
+    LOG(INFO) << "time: " << getTimeDiff(t[5], t[6]) << " ms.";
+    LOG(INFO) << "Returning the results. ";
 
     returnResults(rerankedResults, request, 100);
 

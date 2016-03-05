@@ -23,18 +23,21 @@
 #define PASTEC_IMAGESEARCHER_H
 
 #include <queue>
+#include <memory>
 
 #include <opencv2/core/core.hpp>
 #include <opencv2/flann/flann.hpp>
 
 #include "searcher.h"
-#include "orbindex.h"
-#include "orbwordindex.h"
+#include "orb/orbindex.h"
+#include "orb/orbwordindex.h"
 #include "searchResult.h"
 #include "imagereranker.h"
 
 using namespace cv;
 using namespace std;
+
+class ImageReranker;
 
 class ORBSearcher : public Searcher
 {
@@ -44,6 +47,8 @@ public:
     u_int32_t searchImage(SearchRequest &request);
     u_int32_t searchSimilar(SearchRequest &request);
 
+    ORBIndex *index_;
+    Mat reqImage_;
 private:
     void returnResults(priority_queue<SearchResult> &rankedResults,
                        SearchRequest &req, unsigned i_maxNbResults);
@@ -51,9 +56,8 @@ private:
     u_int32_t processSimilar(SearchRequest &request,
                              const std::unordered_map<u_int32_t, list<Hit> > &imageReqHits);
 
-    ORBIndex *index_;
     ORBWordIndex *wordIndex_;
-    ImageReranker reranker_;
+    unique_ptr<ImageReranker> reranker_;
 };
 
 #endif // PASTEC_IMAGESEARCHER_H

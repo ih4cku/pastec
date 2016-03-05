@@ -69,20 +69,17 @@ u_int32_t ORBFeatureExtractor::processNewImage(unsigned i_imageId, unsigned i_im
         vector<int> dists(1);
         wordIndex->knnSearch(descriptors.row(i), indices, dists, 1);
 
-        for (unsigned j = 0; j < indices.size(); ++j)
+        const unsigned i_wordId = indices[0];
+        if (matchedWords.find(i_wordId) == matchedWords.end())
         {
-            const unsigned i_wordId = indices[j];
-            if (matchedWords.find(i_wordId) == matchedWords.end())
-            {
-                HitForward newHit;
-                newHit.i_wordId = i_wordId;
-                newHit.i_imageId = i_imageId;
-                newHit.i_angle = angle;
-                newHit.x = x;
-                newHit.y = y;
-                imageHits.push_back(newHit);
-                matchedWords.insert(i_wordId);
-            }
+            HitForward newHit;
+            newHit.i_wordId = i_wordId;
+            newHit.i_imageId = i_imageId;
+            newHit.i_angle = angle;
+            newHit.x = x;
+            newHit.y = y;
+            imageHits.push_back(newHit);
+            matchedWords.insert(i_wordId);
         }
     }
 
